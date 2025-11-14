@@ -1,31 +1,29 @@
 
-//  define constant values 
+//  .............define constant values............. 
 
 #define N 8
 #define buffer_cap 5
 #define satellite_num 3
 
-//  define enumerations  
+//  .............define enumerations.............  
 
-//MessageType = {IMAGE, COMMAND, TELEMETRY, ACK}
-//turn = { onetwo, twothree, onethree };
+mtype = {IMAGE, COMMAND, TELEMETRY, ACK};
 
-//  define custom types
+//  .............define custom types.............
 
 typedef MESSAGE {
-    //MessageType message_type,
+    mtype message_type;
     int sender_satellite_id, receiver_satellite_id, payload;
 }
 
-//  define channels
+//  .............define channels.............
 
 chan time_signal = [1] of {int};
 chan grant_ground[satellite_num] = [1] of {int};
 chan grant_isl[satellite_num] = [1] of {int};
-
 chan ISL = [4] of {int, int, int, int};
 
-//  define variables
+//  .............define variables.............
 
 int current_slot;  
 int message_counter[4] = {0, 0, 0, 0};
@@ -33,27 +31,32 @@ int message_counter[4] = {0, 0, 0, 0};
 
 proctype timekeeper()
 {
+    printf("current slot before write : %d\t", current_slot);
     atomic {
-        time_signal = current_slot;
-        current_slot = current_slot + 1;
-        printf("%d\n", current_slot);
+        if
+        :: time_signal ! current_slot -> 
+        current_slot = (current_slot + 1) % N;
+        fi
+        printf("current slot after write :%d\n", current_slot);
     }
 }
 
 proctype coordinator()
 {
-    atomic {
-        do
-        :: time_signal == 0 -> grant_ground[0] ! 1;
-        :: time_signal == 1 -> grant_ground[1] ! 1;
-        :: time_signal == 2 -> grant_ground[2] ! 1;
-        :: time_signal == 3;
-        :: time_signal == 4 -> grant_isl[0] ! 12;
-        :: time_signal == 5 -> grant_isl[1] ! 23;
-        :: time_signal == 6 -> grant_isl[2] ! 13;
-        :: time_signal == 7;
-        od
-    }
+    int slot = -1;
+    if 
+    :: time_signal ? slot -> printf("slot : %d\n", slot);
+        //do
+        //:: turn == 0 -> grant_ground[0] ! 1;
+        //:: turn == 1 -> grant_ground[1] ! 1;
+        //:: turn == 2 -> grant_ground[2] ! 1;
+        //:: turn == 3;
+        //:: turn == 4 -> grant_isl[0] ! 12;
+        //:: turn == 5 -> grant_isl[1] ! 23;
+        //:: turn == 6 -> grant_isl[2] ! 13;
+        //:: turn == 7;
+        //od
+    fi
 }
 
 proctype satellite(int id)
@@ -88,14 +91,28 @@ proctype satellite(int id)
 
 
 init {
-
     //run satellite(1);
     //run satellite(2);
     //run satellite(3);
-
     run timekeeper();
+    run coordinator();
     run timekeeper();
-
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
 }
 
-// chan grant_isl = [0] of {turn};
