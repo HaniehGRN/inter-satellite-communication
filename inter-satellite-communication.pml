@@ -36,7 +36,7 @@ proctype timekeeper()
     atomic {
         time_signal = current_slot;
         current_slot = current_slot + 1;
-        printf("Process %d started. Total instances: %d\n", _pid, current_slot);
+        printf("%d\n", current_slot);
     }
 }
 
@@ -62,19 +62,19 @@ proctype satellite(int id)
     int tail = 0;
     int head = 0;
     bool is_turn = false;
-    MESSAGE temp_message;
+    //MESSAGE temp_message;
 
     if 
-    :: tail > -1 -> goto wait
+    :: tail > -1
     fi
 
-    if 
-    :: head > 0
-    :: (ISL[id] ? temp_message) ->
-        if 
-        :: (tail < buffer_cap ) -> buff[tail]; tail = tail + 1;
-        :: else -> printf("Warning\n");
-    fi 
+    //if 
+    //:: head > 0
+    //:: (ISL[id] ? temp_message) ->
+        //if 
+        //:: (tail < buffer_cap ) -> buff[tail]; tail = tail + 1;
+        //:: else -> printf("Warning\n");
+    //fi 
 
 
 //wait:
