@@ -7,35 +7,34 @@
 
 //  define enumerations  
 
-MessageType = {IMAGE, COMMAND, TELEMETRY, ACK}
-turn = { onetwo, twothree, onethree };
+//MessageType = {IMAGE, COMMAND, TELEMETRY, ACK}
+//turn = { onetwo, twothree, onethree };
 
 //  define custom types
 
 typedef MESSAGE {
-    MessageType message_type,
-    int sender_satellite_id, 
-    int receiver_satellite_id,
-    int payload;
+    //MessageType message_type,
+    int sender_satellite_id, receiver_satellite_id, payload;
 }
 
 //  define channels
 
-chan time_signal[satellite_num] = [1] of {int};
+chan time_signal = [1] of {int};
 chan grant_ground[satellite_num] = [1] of {int};
-chan grant_isl = [0] of {turn};
-chan ISL = [4] of {MESSAGE};
+chan grant_isl[satellite_num] = [1] of {int};
+
+chan ISL = [4] of {int, int, int, int};
 
 //  define variables
 
 int current_slot;  
-int message_counter[4];
+int message_counter[4] = {0, 0, 0, 0};
 
-//grant_isl[0] = onetwo;
 
 proctype timekeeper()
 {
     atomic {
+        time_signal = current_slot;
         current_slot = current_slot + 1;
         printf("Process %d started. Total instances: %d\n", _pid, current_slot);
     }
@@ -45,14 +44,14 @@ proctype coordinator()
 {
     atomic {
         do
-        :: current_slot = 0 -> grant_ground[0] ! 1;
-        :: current_slot = 1 -> grant_ground[1] ! 1;
-        :: current_slot = 2 -> grant_ground[2] ! 1;
-        :: current_slot = 3;
-        :: current_slot = 4 -> grant_isl ! onetwo;
-        :: current_slot = 5 -> grant_isl ! twothree;
-        :: current_slot = 6 -> grant_isl ! onethree;
-        :: current_slot = 7;
+        :: time_signal == 0 -> grant_ground[0] ! 1;
+        :: time_signal == 1 -> grant_ground[1] ! 1;
+        :: time_signal == 2 -> grant_ground[2] ! 1;
+        :: time_signal == 3;
+        :: time_signal == 4 -> grant_isl[0] ! 12;
+        :: time_signal == 5 -> grant_isl[1] ! 23;
+        :: time_signal == 6 -> grant_isl[2] ! 13;
+        :: time_signal == 7;
         od
     }
 }
@@ -70,7 +69,7 @@ proctype satellite(int id)
     fi
 
     if 
-    :: head > 
+    :: head > 0
     :: (ISL[id] ? temp_message) ->
         if 
         :: (tail < buffer_cap ) -> buff[tail]; tail = tail + 1;
@@ -78,39 +77,25 @@ proctype satellite(int id)
     fi 
 
 
-wait:
-    if 
-    :: 
-    fi
+//wait:
+  //  if 
+    //:: 
+    //fi
 
 }
 
-proctype groundStation()
-{
-    
-}
+//proctype groundStation() {}
 
 
 init {
 
-    run satellite(1);
-    run satellite(2);
-    run satellite(3);
+    //run satellite(1);
+    //run satellite(2);
+    //run satellite(3);
+
+    run timekeeper();
+    run timekeeper();
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// chan grant_isl = [0] of {turn};
