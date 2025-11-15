@@ -13,7 +13,9 @@ mtype = {IMAGE, COMMAND, TELEMETRY, ACK};
 
 typedef MESSAGE {
     mtype message_type;
-    int sender_satellite_id, receiver_satellite_id, payload;
+    int sender_satellite_id;
+    int receiver_satellite_id;
+    int payload;
 }
 
 //  .............define channels.............
@@ -21,6 +23,7 @@ typedef MESSAGE {
 chan time_signal = [1] of {int};
 chan grant_ground[satellite_num] = [1] of {int};
 chan grant_isl[satellite_num] = [1] of {int};
+chan message_sent_to_ground[satellite_num] = [1] of {int};
 //chan ISL[satellite_num] = [1] of MESSAGE;
 
 //  .............define variables.............
@@ -64,44 +67,49 @@ proctype coordinator()
 
 proctype satellite1()
 {
-    //MESSAGE buff[1] = {IMAGE, 1, 3, 222};
+    MESSAGE buff[1];
+    buff[0].message_type = IMAGE;
+    buff[0].sender_satellite_id = 1;
+    buff[0].receiver_satellite_id = 3;
+    buff[0].payload = 25;
     //MESSAGE temp_message;
-    int tail = 0;
+    int tail = 1;
     int head = 0;
     bool is_turn_send_ground = false;
     bool is_turn_send_isl = false;
 
-    do
+    if
     :: tail != head -> 
         if 
         :: grant_ground[0] ? is_turn_send_ground -> 
             if
-            :: is_turn_send_ground -> goto send_ground1
+            :: is_turn_send_ground -> 
+                printf("satellite(1) is sending to the ground\n");
+                head = head + 1;
+                if
+                :: message_sent_to_ground[0] ! 1 -> 
+                    printf("satellite(1) sent to the ground, %d\n", head);
+                :: else -> printf("satellite(1) unable to send to the ground\n");
+                fi
             fi
         :: grant_isl[0] ? is_turn_send_isl ->
             if
-            :: is_turn_send_isl == 12 -> goto send_two
-            :: is_turn_send_isl == 13 -> goto send_three
+            :: is_turn_send_isl == 12 -> 
+                printf("satellite(1) \n");
+            :: is_turn_send_isl == 13 ->
+                printf("satellite(1) \n");
             fi
         fi
-    :: tail == head -> goto skipSlot 
-    od
+    :: tail == head -> 
+        printf("skip slot\n");
+        run timekeeper();
+        run coordinator();
+    fi
 
     //do
     //:: ISL[0] ? temp_message ->
-send_two:
-    printf("one is sending to two\n");
-
-send_three:
-printf("one is sending to three\n");
-
-send_ground1:
-printf("one is sending to the ground\n");
-
-skipSlot:
-printf("skip slot\n");
-run timekeeper();
-run coordinator();
+    
+    
 
 }
 
@@ -114,37 +122,34 @@ proctype satellite2()
     bool is_turn_send_ground = false;
     bool is_turn_send_isl = false;
 
-    do
+    if
     :: tail != head -> 
         if 
         :: grant_ground[1] ? is_turn_send_ground -> 
             if
-            :: is_turn_send_ground -> goto send_ground2
+            :: is_turn_send_ground -> 
+                printf("satellite(2) is sending to the ground\n");
+                head = head + 1;
+                if
+                :: message_sent_to_ground[1] ! 1 -> 
+                    printf("satellite(2) sent to the ground, %d\n", head);
+                :: else -> printf("satellite(2) unable to send to the ground\n");
+                fi
             fi
         :: grant_isl[1] ? is_turn_send_isl ->
             if
-            :: is_turn_send_isl == 12 -> goto send_one
-            :: is_turn_send_isl == 23 -> goto send_three
+            :: is_turn_send_isl == 12 ->
+                printf("satellite(2) \n");
+            :: is_turn_send_isl == 23 ->
+                printf("satellite(2) \n");
             fi
         fi
-    :: tail == head -> goto skipSlot 
-    od
+    :: tail == head -> 
+        printf("skip slot\n");
+        run timekeeper();
+        run coordinator();
+    fi
 
-    //do
-    //:: ISL[0] ? temp_message ->
-send_one:
-    printf("two is sending to one\n");
-
-send_three:
-printf("two is sending to three\n");
-
-send_ground2:
-printf("two is sending to the ground\n");
-
-skipSlot:
-printf("skip slot\n");
-run timekeeper();
-run coordinator();
 
 }
 
@@ -157,38 +162,33 @@ proctype satellite3()
     bool is_turn_send_ground = false;
     bool is_turn_send_isl = false;
 
-    do
+    if
     :: tail != head -> 
         if 
         :: grant_ground[2] ? is_turn_send_ground -> 
             if
-            :: is_turn_send_ground -> goto send_ground3
+            :: is_turn_send_ground -> 
+                printf("satellite(3) is sending to the ground\n");
+                head = head + 1;
+                if
+                :: message_sent_to_ground[2] ! 1 -> 
+                    printf("satellite(3) sent to the ground, %d\n", head);
+                :: else -> printf("satellite(3) unable to send to the ground\n");
+                fi
             fi
         :: grant_isl[2] ? is_turn_send_isl ->
             if
-            :: is_turn_send_isl == 13 -> goto send_one
-            :: is_turn_send_isl == 23 -> goto send_two
+            :: is_turn_send_isl == 13 ->
+                printf("satellite(3)\n");
+            :: is_turn_send_isl == 23 ->
+                printf("satellite(3) \n");
             fi
         fi
-    :: tail == head -> goto skipSlot 
-    od
-
-    //do
-    //:: ISL[0] ? temp_message ->
-send_one:
-    printf("three is sending to one\n");
-
-send_two:
-printf("three is sending to two\n");
-
-send_ground3:
-printf("three is sending to the ground\n");
-
-skipSlot:
-printf("skip slot\n");
-run timekeeper();
-run coordinator();
-
+    :: tail == head -> 
+        printf("skip slot\n");
+        run timekeeper();
+        run coordinator(); 
+    fi
 }
 
 //proctype groundStation() {}
@@ -203,5 +203,12 @@ init {
     run satellite1();
     run timekeeper();
     run coordinator();
+    run satellite2();
+    run timekeeper();
+    run coordinator();
+    run satellite3();
+    run timekeeper();
+    run coordinator();
+    run satellite1();
 }
 
