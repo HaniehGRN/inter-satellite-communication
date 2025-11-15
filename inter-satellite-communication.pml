@@ -32,6 +32,7 @@ int slot = -1;
 
 proctype timekeeper()
 {
+    printf("timekeeper ran.\n");
     //printf("current slot before write : %d\t", current_slot);
     atomic {
         if
@@ -44,6 +45,7 @@ proctype timekeeper()
 
 proctype coordinator()
 {
+    printf("coordinator ran.\n");
     if 
     :: time_signal ? slot -> 
         printf("slot :%d\n", slot);
@@ -64,7 +66,7 @@ proctype satellite1()
 {
     //MESSAGE buff[1] = {IMAGE, 1, 3, 222};
     //MESSAGE temp_message;
-    int tail = 1;
+    int tail = 0;
     int head = 0;
     bool is_turn_send_ground = false;
     bool is_turn_send_isl = false;
@@ -82,7 +84,7 @@ proctype satellite1()
             :: is_turn_send_isl == 13 -> goto send_three
             fi
         fi
-    :: tail == head -> run timekeeper(); run coordinator();
+    :: tail == head -> goto skipSlot 
     od
 
     //do
@@ -95,6 +97,11 @@ printf("one is sending to three\n");
 
 send_ground1:
 printf("one is sending to the ground\n");
+
+skipSlot:
+printf("skip slot\n");
+run timekeeper();
+run coordinator();
 
 }
 
@@ -158,7 +165,7 @@ proctype satellite3()
             :: is_turn_send_isl == 23 -> goto send_two
             fi
         fi
-    :: tail == head -> run timekeeper(); run coordinator();
+    :: tail == head -> run timekeeper(); run coordinator(); break;
     od
 
     //do
@@ -186,10 +193,5 @@ init {
     run satellite1();
     run timekeeper();
     run coordinator();
-    run satellite2();
-    run timekeeper();
-    run coordinator();
-    run satellite3();
-
 }
 
