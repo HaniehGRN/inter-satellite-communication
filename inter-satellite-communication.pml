@@ -127,7 +127,7 @@ proctype satellite2()
             :: is_turn_send_isl == 23 -> goto send_three
             fi
         fi
-    :: tail == head -> run timekeeper(); run coordinator();
+    :: tail == head -> goto skipSlot 
     od
 
     //do
@@ -140,6 +140,11 @@ printf("two is sending to three\n");
 
 send_ground2:
 printf("two is sending to the ground\n");
+
+skipSlot:
+printf("skip slot\n");
+run timekeeper();
+run coordinator();
 
 }
 
@@ -165,7 +170,7 @@ proctype satellite3()
             :: is_turn_send_isl == 23 -> goto send_two
             fi
         fi
-    :: tail == head -> run timekeeper(); run coordinator(); break;
+    :: tail == head -> goto skipSlot 
     od
 
     //do
@@ -178,6 +183,11 @@ printf("three is sending to two\n");
 
 send_ground3:
 printf("three is sending to the ground\n");
+
+skipSlot:
+printf("skip slot\n");
+run timekeeper();
+run coordinator();
 
 }
 
