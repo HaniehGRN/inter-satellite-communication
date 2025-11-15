@@ -68,10 +68,6 @@ proctype coordinator()
         :: slot == 3 -> printf("done4\n");
         :: slot == 4 -> 
             grant_isl[0] ! 12; 
-            //if
-            //:: run satellite1();
-            //:: run satellite2();
-            //fi
             printf("done5\n");
         :: slot == 5 -> grant_isl[1] ! 23; printf("done6\n");
         :: slot == 6 -> grant_isl[2] ! 13; printf("done7\n");
@@ -135,7 +131,7 @@ proctype satellite1()
                     :: ISL[1] ! temp_message_send -> 
                         printf("satellite(1) sent message to satellite(2) \n");
                         head = (head + 1) % buffer_cap;
-                    :: else -> printf("satellite(1) sent message to satellite(2). Full buffer \n");
+                    :: else -> printf("satellite(1) unable to send message to satellite(2). Full buffer \n");
                     fi
                 fi
             ::  grant_isl[2] ? is_turn_send_isl13 -> 
@@ -159,21 +155,21 @@ proctype satellite1()
 
 proctype satellite2()
 {
-    MESSAGE buff[buffer_cap];
-    MESSAGE temp_message;
+    MESSAGE buff[buffer_cap], temp_message_receive, temp_message_send;
     int tail = 0;
     int head = 0;
     bool is_turn_send_ground = false;
-    bool is_turn_send_isl = false;
+    int is_turn_send_isl12 = 0;
+    int is_turn_send_isl23 = 0;
 
 //  .............receiving phase.............
 
     do
-    :: ISL[1] ? temp_message -> 
-        buff[tail].message_type = temp_message.message_type;
-        buff[tail].sender_satellite_id = temp_message.sender_satellite_id;
-        buff[tail].receiver_satellite_id = temp_message.receiver_satellite_id;
-        buff[tail].payload = temp_message.payload;
+    :: ISL[1] ? temp_message_receive -> 
+        buff[tail].message_type = temp_message_receive.message_type;
+        buff[tail].sender_satellite_id = temp_message_receive.sender_satellite_id;
+        buff[tail].receiver_satellite_id = temp_message_receive.receiver_satellite_id;
+        buff[tail].payload = temp_message_receive.payload;
         printf("satellite(2) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
         tail = (tail + 1) % buffer_cap;
     od
@@ -183,6 +179,10 @@ proctype satellite2()
 
     if
     :: tail != head -> 
+        temp_message_send.message_type = buff[head].message_type;
+        temp_message_send.sender_satellite_id = buff[head].sender_satellite_id;
+        temp_message_send.receiver_satellite_id = buff[head].receiver_satellite_id;
+        temp_message_send.payload = buff[head].payload;
         if 
         :: grant_ground[1] ? is_turn_send_ground -> 
             if
@@ -200,13 +200,27 @@ proctype satellite2()
                 :: else -> printf("satellite(2) unable to send to the ground -- blocked\n");
                 fi
             fi
-        :: grant_isl[1] ? is_turn_send_isl ->
+        ::  grant_isl[0] ? is_turn_send_isl12 ->
+                if 
+                :: is_turn_send_isl12 == 12 -> 
+                    if
+                    :: ISL[0] ! temp_message_send -> 
+                        printf("satellite(2) sent message to satellite(1) \n");
+                        head = (head + 1) % buffer_cap;
+                    :: else -> printf("satellite(2) unable to send message to satellite(1). Full buffer \n");
+                    fi
+                fi
+        ::  grant_isl[2] ? is_turn_send_isl23 -> 
             if
-            :: is_turn_send_isl == 12 ->
-                printf("satellite(2) \n");
-            :: is_turn_send_isl == 23 ->
-                printf("satellite(2) \n");
+            :: is_turn_send_isl23 == 23 ->
+                if
+                :: ISL[2] ! temp_message_send -> 
+                    printf("satellite(2) sent message to satellite(3) \n");
+                    head = (head + 1) % buffer_cap;
+                :: else -> printf("satellite(2) unable to send message to satellite(3). Full buffer \n");
+                fi
             fi
+        :: else -> printf("satellite(2) unable to send message -- all channels blocked \n");
         fi
     :: tail == head -> 
         printf("skip slot\n");
@@ -218,27 +232,31 @@ proctype satellite2()
 
 proctype satellite3()
 {
-    MESSAGE buff[buffer_cap];
-    MESSAGE temp_message;
+    MESSAGE buff[buffer_cap], temp_message_receive, temp_message_send;
     int tail = 0;
     int head = 0;
     bool is_turn_send_ground = false;
-    bool is_turn_send_isl = false;
+    int is_turn_send_isl13 = 0;
+    int is_turn_send_isl23 = 0;
 
 //  .............receiving phase.............
 
     do
-    :: ISL[2] ? temp_message -> 
-        buff[tail].message_type = temp_message.message_type;
-        buff[tail].sender_satellite_id = temp_message.sender_satellite_id;
-        buff[tail].receiver_satellite_id = temp_message.receiver_satellite_id;
-        buff[tail].payload = temp_message.payload;
+    :: ISL[2] ? temp_message_receive -> 
+        buff[tail].message_type = temp_message_receive.message_type;
+        buff[tail].sender_satellite_id = temp_message_receive.sender_satellite_id;
+        buff[tail].receiver_satellite_id = temp_message_receive.receiver_satellite_id;
+        buff[tail].payload = temp_message_receive.payload;
         printf("satellite(3) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
         tail = (tail + 1) % buffer_cap;
     od
 
     if
     :: tail != head -> 
+        temp_message_send.message_type = buff[head].message_type;
+        temp_message_send.sender_satellite_id = buff[head].sender_satellite_id;
+        temp_message_send.receiver_satellite_id = buff[head].receiver_satellite_id;
+        temp_message_send.payload = buff[head].payload;
         if 
         :: grant_ground[2] ? is_turn_send_ground -> 
             if
@@ -255,13 +273,27 @@ proctype satellite3()
                 :: else -> printf("satellite(3) unable to send to the ground\n");
                 fi
             fi
-        :: grant_isl[2] ? is_turn_send_isl ->
+        ::  grant_isl[2] ? is_turn_send_isl13 ->
+                if 
+                :: is_turn_send_isl13 == 13 -> 
+                    if
+                    :: ISL[0] ! temp_message_send -> 
+                        printf("satellite(3) sent message to satellite(1) \n");
+                        head = (head + 1) % buffer_cap;
+                    :: else -> printf("satellite(3) unable to send message to satellite(1). Full buffer \n");
+                    fi
+                fi
+        ::  grant_isl[1] ? is_turn_send_isl23 -> 
             if
-            :: is_turn_send_isl == 13 ->
-                printf("satellite(3)\n");
-            :: is_turn_send_isl == 23 ->
-                printf("satellite(3) \n");
+            :: is_turn_send_isl23 == 23 ->
+                if
+                :: ISL[1] ! temp_message_send -> 
+                    printf("satellite(3) sent message to satellite(2) \n");
+                    head = (head + 1) % buffer_cap;
+                :: else -> printf("satellite(3) unable to send message to satellite(2). Full buffer \n");
+                fi
             fi
+        :: else -> printf("satellite(3) unable to send message -- all channels blocked \n");
         fi
     :: tail == head -> 
         printf("skip slot\n");
@@ -302,6 +334,19 @@ init {
     run timekeeper();
     run coordinator();
     run satellite1();
+    run satellite2();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run satellite3();
+    run timekeeper();
+    run coordinator();
+    run timekeeper();
+    run coordinator();
+    run satellite2();
     run satellite2();
 }
 
