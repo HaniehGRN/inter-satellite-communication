@@ -23,7 +23,7 @@ typedef MESSAGE {
 chan time_signal = [1] of {int};
 chan grant_ground[satellite_num] = [1] of {int};
 chan grant_isl[satellite_num] = [1] of {int};
-chan message_sent_to_ground[satellite_num] = [1] of {int};
+chan message_sent_to_ground = [3] of {int, int, int};
 chan ISL[satellite_num] = [2] of {mtype, int, int, int};
 
 //  .............define variables.............
@@ -31,47 +31,32 @@ chan ISL[satellite_num] = [2] of {mtype, int, int, int};
 int current_slot;
 int message_counter[4] = {0, 0, 0, 0};
 int slot = -1;
+int message_num_per_satellite[satellite_num];
 
 
 proctype timekeeper()
 {
-    printf("timekeeper ran.\n");
-    //printf("current slot before write : %d\t", current_slot);
     atomic {
         if
         :: time_signal ! current_slot -> 
         current_slot = (current_slot + 1) % N;
         fi
-        //printf("current slot after write :%d\n", current_slot);
     }
 }
 
 proctype coordinator()
 {
-    printf("coordinator ran.\n");
     if 
     :: time_signal ? slot -> 
-        printf("slot :%d\n", slot);
         if
-        :: slot == 0 -> 
-            grant_ground[0] ! 1; 
-            //run satellite1();
-            printf("done1\n");
-        :: slot == 1 -> 
-            grant_ground[1] ! 1; 
-            //run satellite2();
-            printf("done2\n");
-        :: slot == 2 -> 
-            grant_ground[2] ! 1;
-            //run satellite3();
-            printf("done3\n");
-        :: slot == 3 -> printf("done4\n");
-        :: slot == 4 -> 
-            grant_isl[0] ! 12; 
-            printf("done5\n");
-        :: slot == 5 -> grant_isl[1] ! 23; printf("done6\n");
-        :: slot == 6 -> grant_isl[2] ! 13; printf("done7\n");
-        :: slot == 7 -> printf("done8\n");
+        :: slot == 0 -> grant_ground[0] ! 1; 
+        :: slot == 1 -> grant_ground[1] ! 1; 
+        :: slot == 2 -> grant_ground[2] ! 1;
+        :: slot == 3 -> printf("Synchronization slot\n");
+        :: slot == 4 -> grant_isl[0] ! 12; 
+        :: slot == 5 -> grant_isl[1] ! 23;
+        :: slot == 6 -> grant_isl[2] ! 13;
+        :: slot == 7 -> printf("Synchronization slot\n");
         fi
     fi
 }
@@ -96,7 +81,6 @@ proctype satellite1()
         buff[tail].payload = temp_message_receive.payload;
         printf("satellite(1) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
         tail = (tail + 1) % buffer_cap;
-        printf("%d\n", tail);
     fi
 
 //  .............sending phase.............
@@ -119,8 +103,8 @@ proctype satellite1()
                     buff[head].payload = -1;
                     head = (head + 1) % buffer_cap;
                     if
-                    :: message_sent_to_ground[0] ! 1 -> 
-                        printf("satellite(1) sent to the ground, %d\n", head);
+                    :: message_sent_to_ground ! 1 -> 
+                        printf("satellite(1) sent to the ground \n");
                     :: else -> printf("satellite(1) unable to send to the ground\n");
                     fi
                 fi
@@ -190,7 +174,7 @@ proctype satellite2()
                 printf("satellite(2) is sending to the ground\n");
                 
                 if
-                :: message_sent_to_ground[1] ! 1 -> 
+                :: message_sent_to_ground ! 2 -> 
                     printf("satellite(2) sent to the ground, %d\n", head);
                     buff[head].message_type = NONE;
                     buff[head].sender_satellite_id = -1;
@@ -263,7 +247,7 @@ proctype satellite3()
             :: is_turn_send_ground -> 
                 printf("satellite(3) is sending to the ground\n");
                 if
-                :: message_sent_to_ground[2] ! 1 -> 
+                :: message_sent_to_ground ! 3 -> 
                     printf("satellite(3) sent to the ground, %d\n", head);
                     buff[head].message_type = NONE;
                     buff[head].sender_satellite_id = -1;
@@ -302,51 +286,70 @@ proctype satellite3()
     fi
 }
 
-//proctype groundStation() {}
+proctype groundStation() {
+
+    int temp_message;
+
+    if
+    :: message_sent_to_ground ? temp_message -> 
+        if
+        :: temp_message == 1 -> 
+            message_num_per_satellite[0] = message_num_per_satellite[0] + 1;
+            printf("satellite(1) sent %d message(s) to the ground! \n", message_num_per_satellite[0]);
+        :: temp_message == 2 -> 
+            message_num_per_satellite[1] = message_num_per_satellite[1] + 1;
+            printf("satellite(2) sent %d message(s) to the ground! \n", message_num_per_satellite[1]);
+        :: temp_message == 3 -> 
+            message_num_per_satellite[2] = message_num_per_satellite[2] + 1;
+            printf("satellite(3) sent %d message(s) to the ground! \n", message_num_per_satellite[2]);
+        :: else -> printf("No buffered message from satellite(1) sent to the ground at the moment! \n");
+        fi
+    :: else -> printf("ground receiving buffer blocked! \n");
+    fi
+}
 
 
 init {
     //run satellite(1);
     //run satellite(2);
     //run satellite(3);
-    MESSAGE m, h;
-    m.message_type = IMAGE;
-    m.sender_satellite_id = 1;
-    m.receiver_satellite_id = 3;
-    m.payload = 25;
-    h.message_type = ACK;
-    h.sender_satellite_id = 3;
-    h.receiver_satellite_id = 1;
-    h.payload = 123;
-    ISL[0] ! m;
-    run timekeeper();
-    run coordinator();
-    run satellite1();
-    ISL[0] ! h;
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run satellite1();
-    run satellite2();
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run satellite3();
-    run timekeeper();
-    run coordinator();
-    run timekeeper();
-    run coordinator();
-    run satellite2();
-    run satellite2();
+    int max = 0;
+    do
+    :: max < 3 ->
+        max = max + 1
+        MESSAGE m, h;
+        m.message_type = IMAGE;
+        m.sender_satellite_id = 1;
+        m.receiver_satellite_id = 3;
+        m.payload = 25;
+        h.message_type = ACK;
+        h.sender_satellite_id = 3;
+        h.receiver_satellite_id = 1;
+        h.payload = 123;
+        ISL[0] ! m;
+        run timekeeper();
+        run coordinator();
+        run satellite1();
+        ISL[0] ! h;
+        run timekeeper();
+        run coordinator();
+        run satellite1();
+        run timekeeper();
+        run coordinator();
+        run groundStation();
+        run timekeeper();
+        run coordinator();
+        run satellite2();
+        run timekeeper();
+        run coordinator();
+        run groundStation();
+        run timekeeper();
+        run coordinator();
+        run satellite3();
+        run timekeeper();
+        run coordinator();
+        run groundStation();
+    od
+
 }
 
