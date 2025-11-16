@@ -73,7 +73,7 @@ proctype satellite1()
 
 //  .............receiving phase.............
 
-    if
+    do
     :: ISL[0] ? temp_message_receive -> 
         buff[tail].message_type = temp_message_receive.message_type;
         buff[tail].sender_satellite_id = temp_message_receive.sender_satellite_id;
@@ -81,11 +81,12 @@ proctype satellite1()
         buff[tail].payload = temp_message_receive.payload;
         printf("satellite(1) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
         tail = (tail + 1) % buffer_cap;
-    fi
+    :: else -> goto sendingPhase1
+    od
 
 //  .............sending phase.............
     
-    
+sendingPhase1:    
         if
         :: tail != head -> 
             temp_message_send.message_type = buff[head].message_type;
@@ -156,11 +157,13 @@ proctype satellite2()
         buff[tail].payload = temp_message_receive.payload;
         printf("satellite(2) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
         tail = (tail + 1) % buffer_cap;
+    :: else -> goto sendingPhase2
     od
 
 
 //  .............sending phase.............
 
+sendingPhase2:
     if
     :: tail != head -> 
         temp_message_send.message_type = buff[head].message_type;
@@ -233,8 +236,12 @@ proctype satellite3()
         buff[tail].payload = temp_message_receive.payload;
         printf("satellite(3) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
         tail = (tail + 1) % buffer_cap;
+    :: else -> goto sendingPhase3
     od
 
+//  .............sending phase.............
+
+sendingPhase3:
     if
     :: tail != head -> 
         temp_message_send.message_type = buff[head].message_type;
@@ -248,7 +255,7 @@ proctype satellite3()
                 printf("satellite(3) is sending to the ground\n");
                 if
                 :: message_sent_to_ground ! 3 -> 
-                    printf("satellite(3) sent to the ground, %d\n", head);
+                    printf("satellite(3) sent to the ground, %d\n");
                     buff[head].message_type = NONE;
                     buff[head].sender_satellite_id = -1;
                     buff[head].receiver_satellite_id = -1;
