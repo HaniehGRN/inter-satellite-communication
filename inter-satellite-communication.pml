@@ -40,7 +40,9 @@ int current_slot;
 int message_counter[4] = {0, 0, 0, 0};
 int slot = -1;
 int message_num_per_satellite[satellite_num];
+int charge_amount[satellite_num] = {max_energy, max_energy, max_energy};
 
+//  .............define processes.............
 
 proctype timekeeper()
 {
@@ -57,14 +59,23 @@ proctype coordinator()
     if 
     :: time_signal ? slot -> 
         if
-        :: slot == 0 -> grant_ground[0] ! 1; 
-        :: slot == 1 -> grant_ground[1] ! 1; 
-        :: slot == 2 -> grant_ground[2] ! 1;
-        :: slot == 3 -> printf("Synchronization slot\n");
-        :: slot == 4 -> grant_isl[0] ! 12; 
-        :: slot == 5 -> grant_isl[1] ! 23;
-        :: slot == 6 -> grant_isl[2] ! 13;
-        :: slot == 7 -> printf("Synchronization slot\n");
+        :: slot == 0 -> 
+            grant_ground[0] ! 1; 
+
+        :: slot == 1 -> 
+            grant_ground[1] ! 1; 
+        :: slot == 2 -> 
+            grant_ground[2] ! 1;
+        :: slot == 3 -> 
+            printf("Synchronization slot\n");
+        :: slot == 4 -> 
+            grant_isl[0] ! 12; 
+        :: slot == 5 -> 
+            grant_isl[1] ! 23;
+        :: slot == 6 -> 
+            grant_isl[2] ! 13;
+        :: slot == 7 -> 
+            printf("Synchronization slot\n");
         fi
     fi
 }
