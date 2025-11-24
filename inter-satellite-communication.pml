@@ -7,6 +7,11 @@
 #define max_energy 100
 #define safe_energy_bound 20
 #define critical_bound 10
+#define charging_unit_per_slot 8
+#define decharge_unit_ISL_send 10
+#define decharge_unit_ground_send 15
+#define decharge_unit_receive 5
+
 
 //  .............define enumerations.............  
 
