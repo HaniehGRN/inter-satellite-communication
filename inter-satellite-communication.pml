@@ -2,8 +2,9 @@
 //  .............define constant values............. 
 
 #define N 8
-#define buffer_cap 5
+#define buffer_cap 2  // Reduced from 5 to minimize state space
 #define satellite_num 3
+#define MAX_MESSAGES 10  // Bound for message counters
 
 //  .............define enumerations.............  
 
@@ -36,17 +37,19 @@ int message_num_per_satellite[satellite_num];
 
 proctype timekeeper()
 {
-    atomic {
+    do
+    :: atomic {
         if
         :: time_signal ! current_slot -> 
         current_slot = (current_slot + 1) % N;
         fi
     }
+    od
 }
 
 proctype coordinator()
 {
-    if 
+    do
     :: time_signal ? slot -> 
         if
         :: slot == 0 -> grant_ground[0] ! 1; 
@@ -58,7 +61,7 @@ proctype coordinator()
         :: slot == 6 -> grant_isl[2] ! 13;
         :: slot == 7 -> printf("Synchronization slot\n");
         fi
-    fi
+    od
 }
 
 
@@ -86,7 +89,8 @@ proctype satellite1()
 
 //  .............sending phase.............
     
-sendingPhase1:    
+sendingPhase1:
+    do
         if
         :: tail != head -> 
             temp_message_send.message_type = buff[head].message_type;
@@ -133,9 +137,8 @@ sendingPhase1:
             fi
         :: tail == head -> 
             printf("skip slot\n");
-            run timekeeper();
-            run coordinator();
         fi
+    od
 }
 
 proctype satellite2()
@@ -164,6 +167,7 @@ proctype satellite2()
 //  .............sending phase.............
 
 sendingPhase2:
+    do
     if
     :: tail != head -> 
         temp_message_send.message_type = buff[head].message_type;
@@ -211,10 +215,8 @@ sendingPhase2:
         fi
     :: tail == head -> 
         printf("skip slot\n");
-        run timekeeper();
-        run coordinator();
     fi
-
+    od
 }
 
 proctype satellite3()
@@ -242,6 +244,7 @@ proctype satellite3()
 //  .............sending phase.............
 
 sendingPhase3:
+    do
     if
     :: tail != head -> 
         temp_message_send.message_type = buff[head].message_type;
@@ -288,75 +291,69 @@ sendingPhase3:
         fi
     :: tail == head -> 
         printf("skip slot\n");
-        run timekeeper();
-        run coordinator(); 
     fi
+    od
 }
 
 proctype groundStation() {
 
     int temp_message;
 
-    if
+    do
     :: message_sent_to_ground ? temp_message -> 
         if
         :: temp_message == 1 -> 
-            message_num_per_satellite[0] = message_num_per_satellite[0] + 1;
-            printf("satellite(1) sent %d message(s) to the ground! \n", message_num_per_satellite[0]);
+            if
+            :: message_num_per_satellite[0] < MAX_MESSAGES ->
+                message_num_per_satellite[0] = message_num_per_satellite[0] + 1;
+                printf("satellite(1) sent %d message(s) to the ground! \n", message_num_per_satellite[0]);
+            :: else -> printf("Message counter for satellite(1) reached maximum\n");
+            fi
         :: temp_message == 2 -> 
-            message_num_per_satellite[1] = message_num_per_satellite[1] + 1;
-            printf("satellite(2) sent %d message(s) to the ground! \n", message_num_per_satellite[1]);
+            if
+            :: message_num_per_satellite[1] < MAX_MESSAGES ->
+                message_num_per_satellite[1] = message_num_per_satellite[1] + 1;
+                printf("satellite(2) sent %d message(s) to the ground! \n", message_num_per_satellite[1]);
+            :: else -> printf("Message counter for satellite(2) reached maximum\n");
+            fi
         :: temp_message == 3 -> 
-            message_num_per_satellite[2] = message_num_per_satellite[2] + 1;
-            printf("satellite(3) sent %d message(s) to the ground! \n", message_num_per_satellite[2]);
+            if
+            :: message_num_per_satellite[2] < MAX_MESSAGES ->
+                message_num_per_satellite[2] = message_num_per_satellite[2] + 1;
+                printf("satellite(3) sent %d message(s) to the ground! \n", message_num_per_satellite[2]);
+            :: else -> printf("Message counter for satellite(3) reached maximum\n");
+            fi
         :: else -> printf("No buffered message from satellite(1) sent to the ground at the moment! \n");
         fi
     :: else -> printf("ground receiving buffer blocked! \n");
-    fi
+    od
 }
 
 
 init {
-    //run satellite(1);
-    //run satellite(2);
-    //run satellite(3);
-    int max = 0;
-    do
-    :: max < 3 ->
-        max = max + 1
-        MESSAGE m, h;
-        m.message_type = IMAGE;
-        m.sender_satellite_id = 1;
-        m.receiver_satellite_id = 3;
-        m.payload = 25;
-        h.message_type = ACK;
-        h.sender_satellite_id = 3;
-        h.receiver_satellite_id = 1;
-        h.payload = 123;
-        ISL[0] ! m;
-        run timekeeper();
-        run coordinator();
-        run satellite1();
-        ISL[0] ! h;
-        run timekeeper();
-        run coordinator();
-        run satellite1();
-        run timekeeper();
-        run coordinator();
-        run groundStation();
-        run timekeeper();
-        run coordinator();
-        run satellite2();
-        run timekeeper();
-        run coordinator();
-        run groundStation();
-        run timekeeper();
-        run coordinator();
-        run satellite3();
-        run timekeeper();
-        run coordinator();
-        run groundStation();
-    od
-
+    // Initialize some test messages in channels (bounded)
+    MESSAGE m, h;
+    m.message_type = IMAGE;
+    m.sender_satellite_id = 1;
+    m.receiver_satellite_id = 3;
+    m.payload = 25;
+    h.message_type = ACK;
+    h.sender_satellite_id = 3;
+    h.receiver_satellite_id = 1;
+    h.payload = 123;
+    
+    // Pre-populate channels with initial messages (bounded)
+    if
+    :: ISL[0] ! m -> skip
+    :: else -> skip
+    fi
+    
+    // Create each process type only once
+    run timekeeper();
+    run coordinator();
+    run satellite1();
+    run satellite2();
+    run satellite3();
+    run groundStation();
 }
 
