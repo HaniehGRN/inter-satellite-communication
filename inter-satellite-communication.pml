@@ -4,8 +4,9 @@
 #define N 8
 #define buffer_cap 5
 #define satellite_num 3
-#define Energy 100
-#define min_energy 20
+#define max_energy 100
+#define safe_energy_bound 20
+#define critical_bound 10
 
 //  .............define enumerations.............  
 
