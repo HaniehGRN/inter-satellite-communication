@@ -4,6 +4,7 @@
 #define N 8
 #define buffer_cap 5
 #define satellite_num 3
+#define Energy 10
 
 //  .............define enumerations.............  
 
