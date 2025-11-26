@@ -572,6 +572,7 @@ sendingPhase3:
 
 proctype groundStation() {
 
+
     int temp_message;
 
     if
@@ -588,7 +589,7 @@ proctype groundStation() {
             printf("satellite(3) sent %d message(s) to the ground! \n", message_num_per_satellite[2]);
         :: else -> printf("No buffered message from satellite(1) sent to the ground at the moment! \n");
         fi
-    :: else -> printf("ground receiving buffer blocked! \n");
+    :: skip -> printf("ground receiving buffer blocked! \n");
     fi
 }
 
