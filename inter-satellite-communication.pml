@@ -114,22 +114,6 @@ proctype coordinator()
     if 
     :: time_signal ? slot -> 
         if
-        :: charge_amount[0] <= charge_boundary -> 
-            charge_amount[0] = charge_amount[0] + charging_unit_per_slot;
-            printf("charge amount satellite(1) aftre charging in a slot : %d\n", charge_amount[0]);
-        fi
-        if
-        :: charge_amount[1] <= charge_boundary -> 
-            charge_amount[1] = charge_amount[1] + charging_unit_per_slot;
-            printf("charge amount satellite(2) aftre charging in a slot : %d\n", charge_amount[1]);
-        fi 
-        if
-        :: charge_amount[2] <= charge_boundary -> 
-            charge_amount[2] = charge_amount[2] + charging_unit_per_slot;
-            printf("charge amount satellite(3) aftre charging in a slot : %d\n", charge_amount[2]);
-        fi
-
-        if
         :: slot == 0 -> grant_ground[0] ! 1; 
         :: slot == 1 -> grant_ground[1] ! 1; 
         :: slot == 2 -> grant_ground[2] ! 1;
@@ -141,7 +125,6 @@ proctype coordinator()
         fi
     fi
 }
-
 
 proctype satellite1()
 {
