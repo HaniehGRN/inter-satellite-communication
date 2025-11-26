@@ -319,51 +319,103 @@ proctype satellite2()
 
 sendingPhase2:
     if
-    :: tail != head -> 
-        temp_message_send.message_type = buff[head].message_type;
-        temp_message_send.sender_satellite_id = buff[head].sender_satellite_id;
-        temp_message_send.receiver_satellite_id = buff[head].receiver_satellite_id;
-        temp_message_send.payload = buff[head].payload;
-        if 
-        :: grant_ground[1] ? is_turn_send_ground -> 
-            if
-            :: is_turn_send_ground -> 
-                printf("satellite(2) is sending to the ground\n");
-                
+    :: tail_sat2 != head_sat2 -> 
+        temp_message_send.message_type = buff[head_sat2].message_type;
+        temp_message_send.sender_satellite_id = buff[head_sat2].sender_satellite_id;
+        temp_message_send.receiver_satellite_id = buff[head_sat2].receiver_satellite_id;
+        temp_message_send.payload = buff[head_sat2].payload;
+
+        // Only attempt to send if energy is above SAFE_ENERGY and not in Safe Mode
+        if
+        :: energy_satellite[1] >= SAFE_ENERGY && !safe_mode[1] ->
+            if 
+            :: grant_ground[1] ? is_turn_send_ground -> 
                 if
-                :: message_sent_to_ground ! 2 -> 
-                    printf("satellite(2) sent to the ground, %d\n", head);
-                    buff[head].message_type = NONE;
-                    buff[head].sender_satellite_id = -1;
-                    buff[head].receiver_satellite_id = -1;
-                    buff[head].payload = -1;
-                    head = (head + 1) % buffer_cap;
-                :: else -> printf("satellite(2) unable to send to the ground -- blocked\n");
-                fi
-            fi
-        ::  grant_isl[0] ? is_turn_send_isl12 ->
-                if 
-                :: is_turn_send_isl12 == 12 -> 
+                :: is_turn_send_ground -> 
+                    printf("satellite(2) is sending to the ground\n");
+
+                    /* Ensure satellite has at least SAFE_ENERGY before sending */   
+                    assert(energy_satellite[1] >= SAFE_ENERGY);
+                    
                     if
-                    :: ISL[0] ! temp_message_send -> 
-                        printf("satellite(2) sent message to satellite(1) \n");
-                        head = (head + 1) % buffer_cap;
-                    :: else -> printf("satellite(2) unable to send message to satellite(1). Full buffer \n");
+                    :: message_sent_to_ground ! 2 -> 
+
+                       /* Ensure only one message is in the ground station channel at a time*/
+                        assert(len(message_sent_to_ground) <= 1);
+
+                        printf("satellite(2) sent to the ground, %d\n", head_sat2);
+                        buff[head_sat2].message_type = NONE;
+                        buff[head_sat2].sender_satellite_id = -1;
+                        buff[head_sat2].receiver_satellite_id = -1;
+                        buff[head_sat2].payload = -1;
+                        head_sat2 = (head_sat2 + 1) % buffer_cap;
+
+                        /* Energy consumption for ground sending */
+                        if
+                        ::  energy_satellite[1] >= SEND_GROUND_COST ->
+                            energy_satellite[1] = energy_satellite[1] - SEND_GROUND_COST;
+                            printf("satellite(2) sent to ground, energy now: %d\n", energy_satellite[1]);
+                        :: else ->
+                            safe_mode[1] = true;
+                            printf("satellite(2) entering Safe Mode -- not enough energy for ground send\n");
+                        fi;
+                    :: skip -> printf("satellite(2) unable to send to the ground -- blocked\n");
                     fi
                 fi
-        ::  grant_isl[2] ? is_turn_send_isl23 -> 
-            if
-            :: is_turn_send_isl23 == 23 ->
+            ::  grant_isl[0] ? is_turn_send_isl12 ->
+                    if 
+                    :: is_turn_send_isl12 == 12 -> 
+                        /* Ensure satellite has at least SAFE_ENERGY before sending */   
+                        assert(energy_satellite[1] >= SAFE_ENERGY);
+                        if
+                        :: ISL[0] ! temp_message_send -> 
+                            printf("satellite(2) sent message to satellite(1) \n");
+                            head_sat2 = (head_sat2 + 1) % buffer_cap;
+
+                            /* Energy consumption for ISL sending */
+                            if
+                            :: energy_satellite[1] >= SEND_ISL_COST ->
+                                energy_satellite[1] = energy_satellite[1] - SEND_ISL_COST;
+                                printf("satellite(2) sent ISL, energy now: %d\n", energy_satellite[1]);
+                            :: else ->
+                                safe_mode[1] = true;
+                                printf("satellite(2) entering Safe Mode -- not enough energy for ISL\n");
+                            fi;
+                        :: skip -> 
+                        printf("satellite(2) unable to send message to satellite(1). Full buffer \n");
+                        fi
+                    fi
+            ::  grant_isl[2] ? is_turn_send_isl23 -> 
                 if
-                :: ISL[2] ! temp_message_send -> 
-                    printf("satellite(2) sent message to satellite(3) \n");
-                    head = (head + 1) % buffer_cap;
-                :: else -> printf("satellite(2) unable to send message to satellite(3). Full buffer \n");
+                :: is_turn_send_isl23 == 23 ->
+                    /* Ensure satellite has at least SAFE_ENERGY before sending */   
+                    assert(energy_satellite[1] >= SAFE_ENERGY);
+                    if
+                    :: ISL[2] ! temp_message_send -> 
+                        printf("satellite(2) sent message to satellite(3) \n");
+                        head_sat2 = (head_sat2 + 1) % buffer_cap;
+
+                        /* Energy consumption for ISL sending */
+                        if
+                        :: energy_satellite[1] >= SEND_ISL_COST ->
+                            energy_satellite[1] = energy_satellite[1] - SEND_ISL_COST;
+                            printf("satellite(2) sent ISL, energy now: %d\n", energy_satellite[1]);
+                        :: else ->
+                            safe_mode[1] = true;
+                            printf("satellite(2) entering Safe Mode -- not enough energy for ISL\n");
+                        fi;
+                    :: skip -> 
+                    printf("satellite(2) unable to send message to satellite(3). Full buffer \n");
+                    fi
                 fi
+            :: skip -> 
+               printf("satellite(2) unable to send message -- all channels blocked \n");
             fi
-        :: else -> printf("satellite(2) unable to send message -- all channels blocked \n");
+        :: else ->
+           safe_mode[1] = true;
+           printf("satellite(2) entering Safe Mode, energy: %d\n", energy_satellite[1]);
         fi
-    :: tail == head -> 
+    :: tail_sat2 == head_sat2 -> 
         printf("skip slot\n");
         run timekeeper();
         run coordinator();
