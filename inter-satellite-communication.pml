@@ -129,8 +129,8 @@ proctype coordinator()
 proctype satellite1()
 {
     MESSAGE buff[buffer_cap], temp_message_receive, temp_message_send;
-    int tail = 0;
-    int head = 0;
+    tail_sat1 = 0;
+    head_sat1 = 0;
     bool is_turn_send_ground = false;
     int is_turn_send_isl12 = 0;
     int is_turn_send_isl13 = 0;
@@ -209,8 +209,8 @@ sendingPhase1:
 proctype satellite2()
 {
     MESSAGE buff[buffer_cap], temp_message_receive, temp_message_send;
-    int tail = 0;
-    int head = 0;
+    tail_sat2 = 0;
+    head_sat2 = 0;
     bool is_turn_send_ground = false;
     int is_turn_send_isl12 = 0;
     int is_turn_send_isl23 = 0;
@@ -288,12 +288,12 @@ sendingPhase2:
 proctype satellite3()
 {
     MESSAGE buff[buffer_cap], temp_message_receive, temp_message_send;
-    int tail = 0;
-    int head = 0;
+    tail_sat3 = 0;
+    head_sat3 = 0;
     bool is_turn_send_ground = false;
     int is_turn_send_isl13 = 0;
     int is_turn_send_isl23 = 0;
-
+    
 //  .............receiving phase.............
 
     do
