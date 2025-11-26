@@ -83,7 +83,28 @@ proctype timekeeper()
     atomic {
         if
         :: time_signal ! current_slot -> 
-        current_slot = (current_slot + 1) % N;
+           current_slot = (current_slot + 1) % N;
+
+            // Recharge satellite energy from solar panel each time slot
+            int i = 0;
+            do
+            :: i < satellite_num ->
+                if
+                :: (energy_satellite[i] + SOLAR_CHARGE) <= MAX_ENERGY ->
+                    energy_satellite[i] = energy_satellite[i] + SOLAR_CHARGE;
+                :: else ->
+                    energy_satellite[i] = MAX_ENERGY;
+                fi;                
+
+                if
+                :: safe_mode[i] && energy_satellite[i] >= SAFE_ENERGY ->
+                    safe_mode[i] = false;
+                    printf("satellite(%d) exiting Safe Mode, energy: %d\n", i+1, energy_satellite[i]);
+                :: else -> skip
+                fi;
+                i = i + 1
+            :: else -> break   
+            od
         fi
     }
 }
