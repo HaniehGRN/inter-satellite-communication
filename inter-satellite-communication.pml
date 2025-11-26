@@ -49,6 +49,33 @@ int head_sat2 = 0;
 int tail_sat3 = 0;
 int head_sat3 = 0;
 
+//  .............define LTL conditions.............
+
+/* Ensure that whenever there are messages in the buffer (tail != head), 
+   eventually all messages are processed (tail catches up to head)*/
+
+// Always: if satellite 1's buffer is not empty, it will eventually be processed and become empty   
+ltl sat1_processed { [](tail_sat1 != head_sat1 -> <> (tail_sat1 == head_sat1)) }
+
+// Always: if satellite 2's buffer is not empty, it will eventually be processed and become empty
+ltl sat2_processed { [](tail_sat2 != head_sat2 -> <> (tail_sat2 == head_sat2)) }
+
+// Always: if satellite 3's buffer is not empty, it will eventually be processed and become empty
+ltl sat3_processed { [](tail_sat3 != head_sat3 -> <> (tail_sat3 == head_sat3)) }
+
+
+/* Ensure that the ground station grant signal for each satellite is given infinitely often,
+   i.e., each satellite periodically gets access to send data to the ground*/
+
+// Always: satellite 1 will eventually receive permission to send to the ground (periodic ground access)   
+ltl periodic_access_0 { [](<> grant_ground[0]) }
+
+// Always: satellite 2 will eventually receive permission to send to the ground (periodic ground access)
+ltl periodic_access_1 { [](<> grant_ground[1]) }
+
+// Always: satellite 3 will eventually receive permission to send to the ground (periodic ground access)
+ltl periodic_access_2 { [](<> grant_ground[2]) }
+
 //  .............define processes.............
 
 proctype timekeeper()
