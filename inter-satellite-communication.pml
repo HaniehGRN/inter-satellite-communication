@@ -3,14 +3,14 @@
 
 #define N 8
 #define buffer_cap 5
+#define MAX_ENERGY 100
+#define SAFE_ENERGY 20
+#define CRITICAL_ENERGY 10
+#define SEND_ISL_COST 10
+#define SEND_GROUND_COST 15
+#define RECEIVE_COST 5
+#define SOLAR_CHARGE 8
 #define satellite_num 3
-#define max_energy 100
-#define safe_energy_bound 20
-#define critical_bound 10
-#define charging_unit_per_slot 8
-#define decharge_unit_ISL_send 10
-#define decharge_unit_ground_send 15
-#define decharge_unit_receive 5
 
 
 //  .............define enumerations.............  
@@ -41,6 +41,7 @@ int message_counter[4] = {0, 0, 0, 0};
 int slot = -1;
 int message_num_per_satellite[satellite_num];
 int charge_amount[satellite_num] = {max_energy, max_energy, max_energy};
+int safe_mode[satellite_num] = {0, 0, 0};
 
 //  .............define processes.............
 
@@ -59,23 +60,30 @@ proctype coordinator()
     if 
     :: time_signal ? slot -> 
         if
-        :: slot == 0 -> 
-            grant_ground[0] ! 1; 
+        :: charge_amount[0] <= charge_boundary -> 
+            charge_amount[0] = charge_amount[0] + charging_unit_per_slot;
+            printf("charge amount satellite(1) aftre charging in a slot : %d\n", charge_amount[0]);
+        fi
+        if
+        :: charge_amount[1] <= charge_boundary -> 
+            charge_amount[1] = charge_amount[1] + charging_unit_per_slot;
+            printf("charge amount satellite(2) aftre charging in a slot : %d\n", charge_amount[1]);
+        fi 
+        if
+        :: charge_amount[2] <= charge_boundary -> 
+            charge_amount[2] = charge_amount[2] + charging_unit_per_slot;
+            printf("charge amount satellite(3) aftre charging in a slot : %d\n", charge_amount[2]);
+        fi
 
-        :: slot == 1 -> 
-            grant_ground[1] ! 1; 
-        :: slot == 2 -> 
-            grant_ground[2] ! 1;
-        :: slot == 3 -> 
-            printf("Synchronization slot\n");
-        :: slot == 4 -> 
-            grant_isl[0] ! 12; 
-        :: slot == 5 -> 
-            grant_isl[1] ! 23;
-        :: slot == 6 -> 
-            grant_isl[2] ! 13;
-        :: slot == 7 -> 
-            printf("Synchronization slot\n");
+        if
+        :: slot == 0 -> grant_ground[0] ! 1; 
+        :: slot == 1 -> grant_ground[1] ! 1; 
+        :: slot == 2 -> grant_ground[2] ! 1;
+        :: slot == 3 -> printf("Synchronization slot\n");
+        :: slot == 4 -> grant_isl[0] ! 12; 
+        :: slot == 5 -> grant_isl[1] ! 23;
+        :: slot == 6 -> grant_isl[2] ! 13;
+        :: slot == 7 -> printf("Synchronization slot\n");
         fi
     fi
 }
@@ -91,16 +99,20 @@ proctype satellite1()
     int is_turn_send_isl13 = 0;
 
 //  .............receiving phase.............
-
     do
-    :: ISL[0] ? temp_message_receive -> 
-        buff[tail].message_type = temp_message_receive.message_type;
-        buff[tail].sender_satellite_id = temp_message_receive.sender_satellite_id;
-        buff[tail].receiver_satellite_id = temp_message_receive.receiver_satellite_id;
-        buff[tail].payload = temp_message_receive.payload;
-        printf("satellite(1) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
-        tail = (tail + 1) % buffer_cap;
-    :: else -> goto sendingPhase1
+    :: charge_amount[0] >= decharge_unit_receive ->
+        if 
+        :: ISL[0] ? temp_message_receive -> 
+            buff[tail].message_type = temp_message_receive.message_type;
+            buff[tail].sender_satellite_id = temp_message_receive.sender_satellite_id;
+            buff[tail].receiver_satellite_id = temp_message_receive.receiver_satellite_id;
+            buff[tail].payload = temp_message_receive.payload;
+            printf("satellite(1) buffered message {type: %d, sender : %d, receiver: %d, payload: %d}\n", buff[tail].message_type, buff[tail].sender_satellite_id, buff[tail].receiver_satellite_id, buff[tail].payload);
+            tail = (tail + 1) % buffer_cap;
+            charge_amount[0] = charge_amount[0] - decharge_unit_receive;
+            printf("charge amount satellite(1) aftre receiving a message : %d\n", charge_amount[0]);
+        :: else -> goto sendingPhase1
+        fi
     od
 
 //  .............sending phase.............
@@ -336,9 +348,7 @@ proctype groundStation() {
 
 
 init {
-    //run satellite(1);
-    //run satellite(2);
-    //run satellite(3);
+
     int max = 0;
     do
     :: max < 3 ->
