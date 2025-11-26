@@ -39,9 +39,15 @@ chan ISL[satellite_num] = [2] of {mtype, int, int, int};
 int current_slot;
 int message_counter[4] = {0, 0, 0, 0};
 int slot = -1;
-int message_num_per_satellite[satellite_num];
-int charge_amount[satellite_num] = {max_energy, max_energy, max_energy};
-int safe_mode[satellite_num] = {0, 0, 0};
+int message_num_per_satellite[satellite_num] = {0, 0, 0};
+int energy_satellite[satellite_num] = {100, 100, 100};
+bool safe_mode[satellite_num] = {false, false, false};
+int tail_sat1 = 0;
+int head_sat1 = 0;
+int tail_sat2 = 0;
+int head_sat2 = 0;
+int tail_sat3 = 0;
+int head_sat3 = 0;
 
 //  .............define processes.............
 
