@@ -1,0 +1,6 @@
+eclipse.preferences.version=1
+exportStateSpace=false
+languageVersion=CORE_2_1
+projectType=TimedRebeca
+runInSafeMode=true
+timedrebeca-semanticsmodel=true

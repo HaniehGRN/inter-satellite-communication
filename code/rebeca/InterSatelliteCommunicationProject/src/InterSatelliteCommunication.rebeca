@@ -1,0 +1,216 @@
+/*************************************************************
+ * GroundStation
+ * - Receives data from satellites
+ * - Keeps statistics of how many messages each satellite sent
+ *************************************************************/
+reactiveclass GroundStation(15) {    
+    statevars {
+        // Number of messages received from each satellite
+        // Index 0 -> Satellite 1
+        // Index 1 -> Satellite 2
+        // Index 2 -> Satellite 3
+        int [3] messageCount; 
+    }    
+    
+    // Constructor: initialize counters
+    GroundStation() {
+        messageCount[0] = 0;
+        messageCount[1] = 0;
+        messageCount[2] = 0;
+    }
+
+    // Message server called when a satellite sends data to the ground
+    msgsrv receiveFromSatellite(int satId) {       
+        if (satId == 1) messageCount[0] = messageCount[0] + 1;
+        else if (satId == 2) messageCount[1] = messageCount[1] + 1;
+        else if (satId == 3) messageCount[2] = messageCount[2] + 1;
+    }
+}
+
+
+/*************************************************************
+ * Satellite
+ * - Models a satellite with a FIFO data buffer (capacity = 5)
+ * - Can receive inter-satellite messages (ISL)
+ * - Can send data to the GroundStation or to another Satellite
+ 
+// Message type encoding
+// 0 = IMAGE
+// 1 = COMMAND
+// 2 = TELEMETRY
+// 3 = ACK 
+ *************************************************************/
+reactiveclass Satellite(10) { 
+    knownrebecs {
+        GroundStation gs;   // Reference to the ground station
+        Satellite stA;      // Reference to another satellite
+        Satellite stB;      // Reference to another satellite
+    }
+    
+    statevars {
+        int id;             // Satellite identifier (1, 2, or 3)
+
+        // ===== FIFO buffer implementation =====
+        // Stores message information in arrival order
+        int[5] qType;       // Message type
+        int[5] qSender;     // Sender satellite ID
+        int[5] qPayload;    // Message payload
+
+        int head;           // Index of the front element in the FIFO
+        int tail;           // Index of the next free slot in the FIFO
+        int size;           // Current number of buffered messages (0..5)
+        
+        // Add this variable to keep track of message types
+        int typeCounter;
+        int droppedCount;   // Number of dropped messages due to full buffer
+    }   
+
+    // Constructor: initialize satellite state
+    Satellite(int myId) {
+        id = myId;
+        head = 0;
+        tail = 0;
+        size = 0;
+        typeCounter = 0; // Initialize the type counter
+        droppedCount = 0; 
+
+        self.generateTraffic(10);
+    }
+    
+    // ---------------------------------------------------------
+    // ---------------------------------------------------------   
+    msgsrv generateTraffic(int limit) {
+        if (limit > 0) {
+            self.enqueue(typeCounter % 4, id, 100);
+            typeCounter = typeCounter + 1;
+
+            // Generate the next message and decrement the limit
+            self.generateTraffic(limit - 1) after(7);
+        }
+        // If limit reach 0, the satellite stops generating traffic
+    }
+
+    // ---------------------------------------------------------
+    // Enqueue a message into the FIFO buffer
+    // If the buffer is full, the message is dropped
+    // ---------------------------------------------------------
+    void enqueue(int type, int senderId, int payload) {
+        if (size < 5) {
+            qType[tail] = type;
+            qSender[tail] = senderId;
+            qPayload[tail] = payload;
+
+            tail = (tail + 1) % 5;
+            size = size + 1;
+        }
+        else {
+            droppedCount = droppedCount + 1;  
+        }
+    }
+
+    // ---------------------------------------------------------
+    // Receive an inter-satellite message (ISL)
+    // The message is added to the FIFO buffer
+    // ---------------------------------------------------------
+    msgsrv receiveISL(int type, int sId, int payload) {
+        self.enqueue(type, sId, payload);
+    }
+
+    // ---------------------------------------------------------
+    // Grant to send a message to the GroundStation
+    // Only the head (oldest) FIFO message is sent
+    // ---------------------------------------------------------
+    msgsrv grantGround() {
+        if (size > 0) {
+            gs.receiveFromSatellite(id);
+
+            // Remove the sent message from the FIFO
+            head = (head + 1) % 5;
+            size = size - 1;
+        }
+    }
+
+    // ---------------------------------------------------------
+    // Grant to send a message to another satellite (ISL)
+    // Only the head (oldest) FIFO message is sent
+    // ---------------------------------------------------------
+    msgsrv grantISL(Satellite target) {
+        if (size > 0) {
+            target.receiveISL(qType[head], id, qPayload[head]);
+
+            // Remove the sent message from the FIFO
+            head = (head + 1) % 5;
+            size = size - 1;
+        }
+    }
+}
+
+
+/*************************************************************
+ * Coordinator
+ * - Controls time using an 8-slot TDMA schedule
+ * - Grants access to the ground or ISL links in each slot
+ * - Advances time by sending delayed messages to itself
+ *************************************************************/
+reactiveclass Coordinator(15) {
+    knownrebecs {
+        Satellite s1, s2, s3;   // References to the three satellites
+    }
+    
+    statevars {
+        int slot;               // Current TDMA time slot (0..7)
+    }  
+    
+    // Constructor: start from slot 0
+    Coordinator() {
+        slot = 0;
+        self.nextSlot(); 
+    }
+
+    // ---------------------------------------------------------
+    // Advance to the next TDMA slot and grant permissions
+    // ---------------------------------------------------------
+    msgsrv nextSlot() {
+        // Ground station access slots
+        if (slot == 0) s1.grantGround();      
+        else if (slot == 1) s2.grantGround(); 
+        else if (slot == 2) s3.grantGround(); 
+        
+        else if (slot == 3) {
+          // Synchronization slot (no transmission)
+        }
+
+        // Inter-satellite communication slots
+        else if (slot == 4) s1.grantISL(s2);   
+        else if (slot == 5) s2.grantISL(s3);   
+        else if (slot == 6) s1.grantISL(s3); 
+        
+        else if (slot == 7) {
+           // Synchronization slot (no transmission)
+        }  
+
+        // Move to the next slot in the TDMA cycle
+        slot = (slot + 1) % 8; 
+        
+        // Schedule the next slot after a time delay
+        self.nextSlot() after(1);
+    }
+}
+
+
+/*************************************************************
+ * Main
+ * - Instantiates all reactive objects
+ * - Connects satellites, ground station, and coordinator
+ *************************************************************/
+main {
+    GroundStation gs():();
+
+    // Create three satellites with full mesh connectivity
+    Satellite s1(gs, s2, s3):(1);
+    Satellite s2(gs, s1, s3):(2);
+    Satellite s3(gs, s1, s2):(3);
+
+    // Create the coordinator to control the TDMA schedule
+    Coordinator coord(s1, s2, s3):();
+}
