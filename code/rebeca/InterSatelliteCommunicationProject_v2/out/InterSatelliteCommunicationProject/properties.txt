@@ -1,0 +1,5 @@
+NoGroundInterference
+NoSendLowEnergy
+NoBufferOverflow
+EventualProcessing
+PeriodicGroundAccess

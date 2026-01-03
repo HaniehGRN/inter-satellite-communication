@@ -1,0 +1,81 @@
+property {
+    define {
+        // ---------- Slot flags (from Coordinator) ----------
+        s1GroundSlot = coord.slotS1Ground;
+        s2GroundSlot = coord.slotS2Ground;
+        s3GroundSlot = coord.slotS3Ground;
+
+        s1toS2Slot = coord.slotS1toS2;
+        s2toS3Slot = coord.slotS2toS3;
+        s1toS3Slot = coord.slotS1toS3;
+        
+        // ---------- Energy flags (from Satellite) ----------
+        s1EnergyOK = s1.energyOK;
+        s2EnergyOK = s2.energyOK;
+        s3EnergyOK = s3.energyOK;
+        
+
+        // ---------- Buffer flags (from Satellite) ----------
+        s1Pending = s1.pending;
+        s2Pending = s2.pending;
+        s3Pending = s3.pending;
+
+        s1BufOK = s1.bufOK;
+        s2BufOK = s2.bufOK;
+        s3BufOK = s3.bufOK;
+
+        s1Dropped = s1.droppedEver;
+        s2Dropped = s2.droppedEver;
+        s3Dropped = s3.droppedEver;
+
+        // ---------- Ground delivery flags (from GS) ----------
+        s1DeliveredToGS = gs.deliveredS1;
+        s2DeliveredToGS = gs.deliveredS2;
+        s3DeliveredToGS = gs.deliveredS3;
+
+        // ---------- Actual-send events (precise) ----------
+        // Ground send event only when the satellite actually sent to GS
+        s1ActualGroundSend = s1.sentGroundEver;
+        s2ActualGroundSend = s2.sentGroundEver;
+        s3ActualGroundSend = s3.sentGroundEver;
+
+        // ISL send event only when the satellite actually sent over ISL
+        // (we also tie it to the slot flag so we know which link it corresponds to)
+        s1ActualSendToS2 = s1.sentISLEver && coord.slotS1toS2;
+        s2ActualSendToS3 = s2.sentISLEver && coord.slotS2toS3;
+        s1ActualSendToS3 = s1.sentISLEver && coord.slotS1toS3;
+    }
+
+    LTL {
+    
+       NoGroundInterference:
+            G( !((s1GroundSlot && s2GroundSlot) || (s1GroundSlot && s3GroundSlot) || (s2GroundSlot && s3GroundSlot)) );
+            
+       NoSendLowEnergy:
+            G(
+                ((!s1ActualGroundSend) || s1EnergyOK) &&
+                ((!s2ActualGroundSend) || s2EnergyOK) &&
+                ((!s3ActualGroundSend) || s3EnergyOK) &&
+                ((!s1ActualSendToS2)   || s1EnergyOK) &&
+                ((!s2ActualSendToS3)   || s2EnergyOK) &&
+                ((!s1ActualSendToS3)   || s1EnergyOK)
+            );
+            
+       NoBufferOverflow:
+            G( s1BufOK && s2BufOK && s3BufOK );
+            
+            
+       EventualProcessing:
+          G(
+              ( (!s1Pending) || F( s1DeliveredToGS || s1Dropped || (!s1Pending) ) ) &&
+              ( (!s2Pending) || F( s2DeliveredToGS || s2Dropped || (!s2Pending) ) ) &&
+              ( (!s3Pending) || F( s3DeliveredToGS || s3Dropped || (!s3Pending) ) )
+           );
+                       
+            
+        PeriodicGroundAccess:
+            G( F(s1GroundSlot) && F(s2GroundSlot) && F(s3GroundSlot) );
+              
+            
+    }
+}

@@ -1,0 +1,452 @@
+/*************************************************************
+ * GroundStation
+ * - Receives data from satellites
+ * - Keeps statistics of how many messages each satellite sent
+ *************************************************************/
+reactiveclass GroundStation(15) {    
+    statevars {
+        // Number of messages received from each satellite
+        // Index 0 -> Satellite 1
+        // Index 1 -> Satellite 2
+        // Index 2 -> Satellite 3
+        int [3] messageCount; 
+        
+        // ready delivery flags (for property usage)
+        boolean deliveredS1;
+        boolean deliveredS2;
+        boolean deliveredS3;
+    }    
+    
+    // Constructor: initialize counters
+    GroundStation() {
+        messageCount[0] = 0;
+        messageCount[1] = 0;
+        messageCount[2] = 0;
+        
+        deliveredS1 = false;
+        deliveredS2 = false;
+        deliveredS3 = false;
+    }
+
+    // Message server called when a satellite sends data to the ground
+    msgsrv receiveFromSatellite(int satId) {       
+        if (satId == 1) {
+            messageCount[0] = messageCount[0] + 1;
+            deliveredS1 = true;
+        }
+        else if (satId == 2) {
+            messageCount[1] = messageCount[1] + 1;
+            deliveredS2 = true;
+        }
+        else if (satId == 3) {
+            messageCount[2] = messageCount[2] + 1;
+            deliveredS3 = true;
+        }
+    }
+}
+
+
+/*************************************************************
+ * Satellite
+ * - Models a satellite with a FIFO data buffer (capacity = 5)
+ * - Can receive inter-satellite messages (ISL)
+ * - Can send data to the GroundStation or to another Satellite
+ * - Energy management + Safe Mode:
+ *     * initial energy = 100
+ *     * each slot: +8 (cap at 100)
+ *     * receive cost = 5
+ *     * ISL send cost = 10
+ *     * Ground send cost = 15
+ *     * SAFE threshold = 20: cannot send if energy < 20
+ *     * CRITICAL threshold = 10: enter Safe Mode if energy <= 10
+ *     * Safe Mode: no sending, only receiving; exit when energy > 20
+ 
+// Message type encoding
+// 0 = IMAGE
+// 1 = COMMAND
+// 2 = TELEMETRY
+// 3 = ACK 
+ *************************************************************/
+reactiveclass Satellite(20) { 
+    knownrebecs {
+        GroundStation gs;   // Reference to the ground station
+        Satellite stA;      // Reference to another satellite
+        Satellite stB;      // Reference to another satellite
+        Coordinator coord;
+    }
+    
+    statevars {
+        int id;             // Satellite identifier (1, 2, or 3)
+
+        // ===== FIFO buffer implementation =====
+        // Stores message information in arrival order
+        int[5] qType;       // Message type
+        int[5] qSender;     // Sender satellite ID
+        int[5] qPayload;    // Message payload
+
+        int head;           // Index of the front element in the FIFO
+        int tail;           // Index of the next free slot in the FIFO
+        int size;           // Current number of buffered messages (0..5)
+        
+        // Add this variable to keep track of message types
+        int typeCounter;
+        int droppedCount;   // Number of dropped messages due to full buffer
+        
+        // ---------- Energy management ----------
+        int energy;          // 0..100
+        boolean safeMode;    // Safe Mode flag
+
+        // Constants (kept as ints for clarity)
+        int SAFE_TH;         // 20
+        int CRIT_TH;         // 10
+
+        int COST_RX;         // 5  ; Receive Cost
+        int COST_ISL_TX;     // 10 ; Transmission Cost
+        int COST_GS_TX;      // 15 ; Transmission Cost
+
+        int CHARGE_PER_SLOT; // 8
+        int MAX_ENERGY;      // 100
+        
+        
+        //for property usage 
+	    boolean energyOK;
+	    boolean pending;
+	    boolean bufOK;
+	    boolean droppedEver;
+	    
+	    // sending happened flags (for property usage)
+	    boolean sentGroundEver;
+	    boolean sentISLEver;
+	    
+	    int BUF_CAP; // 5
+	    
+        
+    }   
+
+    // Constructor: initialize satellite state
+    Satellite(int myId) {
+        id = myId;
+        head = 0;
+        tail = 0;
+        size = 0;
+        typeCounter = 0; // Initialize the type counter
+        droppedCount = 0; 
+
+        // Energy init 
+        SAFE_TH = 20;
+        CRIT_TH = 10;
+
+        COST_RX = 5;
+        COST_ISL_TX = 10;
+        COST_GS_TX = 15;
+
+        CHARGE_PER_SLOT = 8;
+        MAX_ENERGY = 100;
+
+        energy = 100;
+        safeMode = false;
+        
+        // initialize energyOK (for property usage)
+        energyOK = true; // since energy=100 >= SAFE_TH
+        
+        BUF_CAP = 5;
+        
+        // Generate some initial traffic (bounded)
+        self.generateTraffic(3);
+        
+        // after generating initial traffic, sync flags (for property usage)
+        self.updateLocalFlags();
+        
+        // Satellite 1 acts as the trigger to start the TDMA cycle
+        if (id == 1) {
+            self.startSystem();
+        }
+    }
+    
+    msgsrv startSystem() {
+        // Initiates the first slot in the Coordinator
+        coord.nextSlot();
+    }
+    
+    // ---------------------------------------------------------
+    // Generates a finite number of locally produced messages (no energy cost assumed)
+    // ---------------------------------------------------------   
+    msgsrv generateTraffic(int limit) {
+        if (limit > 0) {
+            self.enqueue(typeCounter % 4, id, 100);
+            typeCounter = typeCounter + 1;
+
+            // Generate the next message and decrement the limit
+            self.generateTraffic(limit - 1);
+        }
+        // If limit reach 0, the satellite stops generating traffic
+    }
+
+    // ---------------------------------------------------------
+    // Enqueue a message into the FIFO buffer
+    // If the buffer is full, the message is dropped
+    // ---------------------------------------------------------
+    void enqueue(int type, int senderId, int payload) {
+        if (size < 5) {
+            qType[tail] = type;
+            qSender[tail] = senderId;
+            qPayload[tail] = payload;
+
+            tail = (tail + 1) % 5;
+            size = size + 1;
+        }
+        else {
+            droppedCount = droppedCount + 1;  
+        }
+        
+        updateLocalFlags();
+    }
+    
+    // ---------------------------------------------------------    
+    // update energyOK based on SAFE_TH (for property usage)
+    // ---------------------------------------------------------
+    void updateEnergyOK() {
+        if (energy >= SAFE_TH) energyOK = true;
+        else energyOK = false;
+    }
+    
+    // ---------------------------------------------------------
+    // updateLocalFlags (for property usage)
+    // ---------------------------------------------------------    
+	void updateLocalFlags() {
+	    // pending depends on size
+	    if (size == 0) pending = false;
+	    else pending = true;
+	
+	    if (size <= BUF_CAP) bufOK = true;
+		else bufOK = false;
+	
+	    if (droppedCount == 0) droppedEver = false;
+	    else droppedEver = true;
+	}
+    
+    // ---------------------------------------------------------
+    // Helper: update Safe Mode based on current energy
+    // ---------------------------------------------------------
+    void updateSafeMode() {
+        // Enter Safe Mode at critical energy or below
+        if (energy <= CRIT_TH) safeMode = true;
+
+        // Exit Safe Mode only after energy is above SAFE threshold
+        if (energy > SAFE_TH) safeMode = false;
+    }
+    
+    // ---------------------------------------------------------
+    // Called once per TDMA slot to charge solar energy (+8, cap at 100)
+    // ---------------------------------------------------------
+    msgsrv chargeSlot() {
+        if (energy + CHARGE_PER_SLOT <= MAX_ENERGY) energy = energy + CHARGE_PER_SLOT;
+        else energy = MAX_ENERGY;
+        
+        //keep energyOK in sync
+        updateEnergyOK();
+        updateSafeMode();
+        updateLocalFlags();
+        
+    }
+    
+    // ---------------------------------------------------------
+    // Receive an inter-satellite message (ISL)
+    // The message is added to the FIFO buffer
+    //  costs energy
+    // ---------------------------------------------------------
+    msgsrv receiveISL(int type, int sId, int payload) {
+    // Receiving costs energy (bounded below by 0)
+        if (energy >= COST_RX) energy = energy - COST_RX;
+        else energy = 0;
+        
+        // keep energyOK in sync
+        updateEnergyOK();
+        updateSafeMode();              
+        
+        self.enqueue(type, sId, payload);
+        
+        //updateLocalFlags();  
+    }
+
+    // ---------------------------------------------------------
+    // Grant to send a message to the GroundStation
+    // Only the head (oldest) FIFO message is sent
+    // (only if allowed by energy + not in Safe Mode)
+    // ---------------------------------------------------------
+    msgsrv grantGround() {
+        // Disallow any sending while in Safe Mode
+        if (!safeMode && energy >= SAFE_TH && size > 0) {
+            // Sending to ground costs 15
+            if (energy >= COST_GS_TX) energy = energy - COST_GS_TX;
+            else energy = 0;
+            
+            // keep energyOK in sync
+            updateEnergyOK();
+            updateSafeMode();            
+                    
+
+            // Deliver to ground station
+            gs.receiveFromSatellite(id);
+            
+            sentGroundEver = true;            
+
+            // Pop FIFO head
+            head = (head + 1) % 5;
+            size = size - 1;
+            
+            updateLocalFlags();    
+        }
+
+        // Advance TDMA
+        coord.nextSlot();
+    }
+
+    // ---------------------------------------------------------
+    // Grant to send a message to another satellite (ISL)
+    // Only the head (oldest) FIFO message is sent
+    //(only if allowed by energy + not in Safe Mode)
+    // ---------------------------------------------------------
+    msgsrv grantISL(Satellite target) {
+        // Disallow any sending while in Safe Mode
+        if (!safeMode && energy >= SAFE_TH && size > 0) {
+            // Sending over ISL costs 10
+            if (energy >= COST_ISL_TX) energy = energy - COST_ISL_TX;
+            else energy = 0;
+            
+            // keep energyOK in sync
+            updateEnergyOK();
+            updateSafeMode();
+                     
+
+            // Send the head message to target
+            target.receiveISL(qType[head], id, qPayload[head]);
+            
+            sentISLEver = true;
+            
+            // Pop FIFO head
+            head = (head + 1) % 5;
+            size = size - 1;
+            
+            updateLocalFlags();   
+        }
+
+        // Advance TDMA
+        coord.nextSlot();
+    }
+}
+
+
+/*************************************************************
+ * Coordinator
+ * - 8-slot TDMA schedule
+ * - Charges energy each slot (+8 for each satellite)
+ * - Enforces "at most one satellite connected to GroundStation at a time"
+ *   using a simple lock (gsBusy) and groundDone() callback.
+ *************************************************************/
+reactiveclass Coordinator(15) {
+    knownrebecs {
+        Satellite s1, s2, s3;   // References to the three satellites
+    }
+    
+    statevars {
+    	// current TDMA slot (0..7)
+        int slot;  
+        
+        //boolean flags for property
+        boolean slotS1Ground;
+        boolean slotS2Ground;
+        boolean slotS3Ground;
+
+        boolean slotS1toS2;
+        boolean slotS2toS3;
+        boolean slotS1toS3;        
+    }  
+    
+    // Constructor: start from slot 0
+    Coordinator() {
+        slot = -1;  // so first nextSlot() moves to slot 0   
+        
+        // init flags
+        slotS1Ground = false;
+        slotS2Ground = false;
+        slotS3Ground = false;
+        slotS1toS2 = false;
+        slotS2toS3 = false;
+        slotS1toS3 = false;  
+    }
+    
+    // ---------------------------------------------------------    
+    // set flags based on current slot (for property)
+    // ---------------------------------------------------------
+    void updateSlotFlags() {
+        slotS1Ground = (slot == 0);
+        slotS2Ground = (slot == 1);
+        slotS3Ground = (slot == 2);
+
+        slotS1toS2 = (slot == 4);
+        slotS2toS3 = (slot == 5);
+        slotS1toS3 = (slot == 6);
+    }
+   
+    // ---------------------------------------------------------
+    // Advance to the next TDMA slot and grant permissions
+    // ---------------------------------------------------------
+    msgsrv nextSlot() {  
+        
+         // Move to the next slot in the TDMA cycle
+        slot = (slot + 1) % 8; 
+        
+        // update flags every slot (for property)
+        updateSlotFlags();   
+        
+        // Solar charging happens every slot for every satellite
+        s1.chargeSlot();
+        s2.chargeSlot();
+        s3.chargeSlot();             
+          
+        // Ground station access slots
+        if (slot == 0) s1.grantGround();      
+        else if (slot == 1) s2.grantGround(); 
+        else if (slot == 2) s3.grantGround(); 
+        
+        else if (slot == 3) {
+		    /// Sync slot: no transmission, but we must advance to avoid getting stuck
+		    self.nextSlot();
+		}
+
+        // Inter-satellite communication slots
+        else if (slot == 4) s1.grantISL(s2);   
+        else if (slot == 5) s2.grantISL(s3);   
+        else if (slot == 6) s1.grantISL(s3); 
+        
+        else if (slot == 7) {
+		    // Sync slot: no transmission, but we must advance to avoid getting stuck
+		    self.nextSlot();
+		} 
+    
+    }
+}
+
+
+/*************************************************************
+ * Main
+ * - Instantiates all reactive objects
+ * - Connects satellites, ground station, and coordinator
+ *************************************************************/
+main {
+    GroundStation gs():();
+    
+     // Create the coordinator to control the TDMA schedule
+    Coordinator coord(s1, s2, s3):();
+
+    // Create three satellites with full mesh connectivity
+    Satellite s1(gs, s2, s3, coord):(1);
+    Satellite s2(gs, s1, s3, coord):(2);
+    Satellite s3(gs, s1, s2, coord):(3);   
+ 
+}
+
+
+
+

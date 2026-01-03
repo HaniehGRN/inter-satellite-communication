@@ -1,0 +1,19 @@
+<model-checking-report>
+<system-info>
+	<total-spent-time>972</total-spent-time>
+	<reached-states>1625549</reached-states>
+	<reached-transitions>26306833</reached-transitions>
+	<consumed-mem>117039528</consumed-mem>
+</system-info>
+<checked-property>
+	<type>LTL</type>
+	<name>PeriodicGroundAccess</name>
+	<result>satisfied</result>
+<options>
+	<option>Safe mode is enabled</option>
+	<option>Nested DFS</option>
+</options>
+</checked-property>
+<counter-example-trace>
+</counter-example-trace>
+</model-checking-report>
